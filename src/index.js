@@ -2,29 +2,25 @@ import React from "react";
 import ReactDOM from "react-dom";
 import "./index.css";
 import App from "./App";
-import { ReactKeycloakProvider } from "@react-keycloak/web";
-import SawsxKeycloak from "./SawsxKeycloak"; // Your Keycloak configuration
-
-// Define a function to log Keycloak events (optional)
-const eventLogger = (event, error) => {
-  console.log("onKeycloakEvent", event, error);
-};
-
-// Define a function to log Keycloak tokens (optional)
-const tokenLogger = (tokens) => {
-  console.log("onKeycloakTokens", tokens);
-};
+import { AuthProvider } from "react-oidc-context";
+import oidcConfig from "./oidcConfig";
 
 ReactDOM.render(
   <React.StrictMode>
-    <ReactKeycloakProvider
-      authClient={SawsxKeycloak}
-      initOptions={{ onLoad: "login-required", pkceMethod: "S256" }}
-      onEvent={eventLogger} // Optional: for logging events
-      onTokens={tokenLogger} // Optional: for logging tokens
+    <AuthProvider
+      {...oidcConfig}
+      onSigninCallback={(user) => {
+        console.log("onSigninCallback", user);
+      }}
+      onSigninError={(error) => {
+        console.error("Signin Error", error);
+      }}
+      onLogout={(user) => {
+        console.log("onLogout", user);
+      }}
     >
       <App />
-    </ReactKeycloakProvider>
+    </AuthProvider>
   </React.StrictMode>,
   document.getElementById("root")
 );
