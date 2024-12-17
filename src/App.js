@@ -23,6 +23,7 @@ const App = () => {
       localStorage.setItem(LOCK_KEY, Date.now().toString());
 
       try {
+        console.log(`Token refreshing using ${keycloak.refreshToken.slice(-5)}`);
         const refreshed = await keycloak.updateToken(30);
         if (refreshed) {
           localStorage.setItem("kc-refresh-token", keycloak.refreshToken);
@@ -44,7 +45,7 @@ const App = () => {
       } finally {
         setTimeout(() => {
           localStorage.removeItem(LOCK_KEY);
-        }, 10000);
+        }, (LOCK_TIMEOUT - 5));
       }
     };
 
@@ -52,7 +53,7 @@ const App = () => {
       if (keycloak.token && keycloak.isTokenExpired(30)) {
         refreshToken();
       }
-    }, 25000);
+    }, (LOCK_TIMEOUT - 5));
 
     const handleStorageEvent = (event) => {
       if (event.key === "kc-token" && event.newValue) {
@@ -69,6 +70,12 @@ const App = () => {
     window.addEventListener("storage", handleStorageEvent);
 
     return () => {
+
+      localStorage.removeItem("kc-token");
+      localStorage.removeItem("kc-refresh-token");
+      localStorage.removeItem("kc-id-token");
+      localStorage.removeItem("kc-token-refresh-lock");
+
       clearInterval(interval);
       window.removeEventListener("storage", handleStorageEvent);
     };
