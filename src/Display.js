@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import { useKeycloak } from "@react-keycloak/web";
+import React from "react";
 
-const Display = ({ keycloak }) => {
-  const [kc, setKc] = useState(keycloak);
+const Display = ({ kc, setKc }) => {
+  const keycloak = useKeycloak();
 
   const epochToReadableTime = (epochTime) => {
     if (!epochTime) return "";
@@ -22,8 +23,10 @@ const Display = ({ keycloak }) => {
   };
 
   const handleClick = async () => {
-    const refreshed = await keycloak.updateToken(30);
-    if (refreshed) setKc(keycloak);
+    const refreshed = await kc.updateToken(30);
+    if (refreshed) {
+      setKc({ ...keycloak });
+    }
   };
 
   return (
