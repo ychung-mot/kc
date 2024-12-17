@@ -9,4 +9,6 @@ const keycloakConfig = {
 
 const SawsxKeycloak = new Keycloak(keycloakConfig);
 
+SawsxKeycloak.onAuthRefreshError = () => console.log('Error on refreshing token!');
+
 export default SawsxKeycloak;

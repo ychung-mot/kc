@@ -19,7 +19,11 @@ ReactDOM.render(
   <React.StrictMode>
     <ReactKeycloakProvider
       authClient={SawsxKeycloak}
-      initOptions={{ onLoad: "login-required", pkceMethod: "S256" }}
+      initOptions={{
+        onLoad: "login-required",
+        pkceMethod: "S256",
+      }}
+      autoRefreshToken={false}
       onEvent={eventLogger} // Optional: for logging events
       onTokens={tokenLogger} // Optional: for logging tokens
     >
