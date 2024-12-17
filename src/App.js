@@ -6,12 +6,13 @@ const App = () => {
   const { keycloak, initialized } = useKeycloak();
   const [kc, setKc] = useState(keycloak);
 
+  const LOCK_KEY = "kc-token-refresh-lock";
+  const LOCK_TIMEOUT = 30000;
+
   useEffect(() => {
     if (!keycloak) return;
 
     const refreshToken = async () => {
-      const LOCK_KEY = "kc-token-refresh-lock";
-      const LOCK_TIMEOUT = 10000; // 10 seconds timeout
       const lock = localStorage.getItem(LOCK_KEY);
 
       if (lock && Date.now() - parseInt(lock) < LOCK_TIMEOUT) {
@@ -24,16 +25,26 @@ const App = () => {
       try {
         const refreshed = await keycloak.updateToken(30);
         if (refreshed) {
-          localStorage.setItem("kc-token", keycloak.token);
           localStorage.setItem("kc-refresh-token", keycloak.refreshToken);
           localStorage.setItem("kc-id-token", keycloak.idToken);
+          localStorage.setItem("kc-token", keycloak.token);
           setKc({ ...keycloak });
-          console.log("Token successfully refreshed");
+          console.log(
+            `Token refreshed: ${keycloak.token.slice(
+              -5
+            )} ${new Date().toLocaleTimeString("en-US", {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })}`
+          );
         }
       } catch (error) {
         console.error("Failed to refresh token:", error);
       } finally {
-        localStorage.removeItem(LOCK_KEY);
+        setTimeout(() => {
+          localStorage.removeItem(LOCK_KEY);
+        }, 10000);
       }
     };
 
@@ -41,7 +52,7 @@ const App = () => {
       if (keycloak.token && keycloak.isTokenExpired(30)) {
         refreshToken();
       }
-    }, 10000);
+    }, 25000);
 
     const handleStorageEvent = (event) => {
       if (event.key === "kc-token" && event.newValue) {
