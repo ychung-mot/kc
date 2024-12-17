@@ -6,78 +6,102 @@ const App = () => {
   const { keycloak, initialized } = useKeycloak();
   const [kc, setKc] = useState(keycloak);
 
-  const LOCK_KEY = "kc-token-refresh-lock";
+  const LOCK_CHANNEL = "kc-token-refresh";
   const LOCK_TIMEOUT = 30000;
 
   useEffect(() => {
     if (!keycloak) return;
 
-    const refreshToken = async () => {
-      const lock = localStorage.getItem(LOCK_KEY);
+    // Create a broadcast channel for token synchronization
+    const refreshChannel = new BroadcastChannel(LOCK_CHANNEL);
+    let refreshLock = false;
 
-      if (lock && Date.now() - parseInt(lock) < LOCK_TIMEOUT) {
-        console.log("Another tab is refreshing the token, skipping...");
+    const getDate = () =>
+      new Date().toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+
+    const refreshToken = async () => {
+      // Use broadcast channel to prevent multiple simultaneous refreshes
+      if (refreshLock) {
         return;
       }
 
-      localStorage.setItem(LOCK_KEY, Date.now().toString());
+      refreshLock = true;
+      console.log(`Locked: ${getDate()}`);
+
+      refreshChannel.postMessage({ type: "REFRESH_LOCK", refreshLock });
 
       try {
-        console.log(`Token refreshing using ${keycloak.refreshToken.slice(-5)}`);
         const refreshed = await keycloak.updateToken(30);
+
         if (refreshed) {
-          localStorage.setItem("kc-refresh-token", keycloak.refreshToken);
-          localStorage.setItem("kc-id-token", keycloak.idToken);
-          localStorage.setItem("kc-token", keycloak.token);
+          const tokenUpdate = {
+            type: "TOKEN_UPDATE",
+            token: keycloak.token,
+            refreshToken: keycloak.refreshToken,
+            idToken: keycloak.idToken,
+          };
+
+          // Broadcast token update to all tabs
+          refreshChannel.postMessage(tokenUpdate);
+
           setKc({ ...keycloak });
           console.log(
-            `Token refreshed: ${keycloak.token.slice(
-              -5
-            )} ${new Date().toLocaleTimeString("en-US", {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-            })}`
+            `Token refreshed: ${keycloak.token.slice(-5)} ${getDate()}`
           );
         }
       } catch (error) {
         console.error("Failed to refresh token:", error);
       } finally {
+        // Release lock after timeout
         setTimeout(() => {
-          localStorage.removeItem(LOCK_KEY);
-        }, (LOCK_TIMEOUT - 5));
+          refreshLock = false;
+          refreshChannel.postMessage({ type: "REFRESH_LOCK", refreshLock });
+          console.log(`UnLocked: ${getDate()}`);
+        }, LOCK_TIMEOUT);
       }
     };
 
+    // Token refresh interval
     const interval = setInterval(() => {
-      if (keycloak.token && keycloak.isTokenExpired(30)) {
-        refreshToken();
-      }
-    }, (LOCK_TIMEOUT - 5));
+      refreshToken();
+    }, LOCK_TIMEOUT);
 
-    const handleStorageEvent = (event) => {
-      if (event.key === "kc-token" && event.newValue) {
-        console.log("Token updated in localStorage, updating Keycloak...");
+    // Handle messages from other tabs
+    const handleBroadcastMessage = (event) => {
+      switch (event.data.type) {
+        case "REFRESH_LOCK":
+          refreshLock = event.data.refreshLock;
+          break;
 
-        // Update Keycloak's in-memory tokens
-        keycloak.token = localStorage.getItem("kc-token");
-        keycloak.refreshToken = localStorage.getItem("kc-refresh-token");
-        keycloak.idToken = localStorage.getItem("kc-id-token");
-        setKc({ ...keycloak });
+        case "TOKEN_UPDATE":
+          if (event.data.token) {
+            console.log("Token updated across tabs, updating Keycloak...");
+
+            // Update Keycloak's in-memory tokens
+            keycloak.token = event.data.token;
+            keycloak.refreshToken = event.data.refreshToken;
+            keycloak.idToken = event.data.idToken;
+
+            setKc({ ...keycloak });
+          }
+          break;
+
+        default:
       }
     };
 
-    window.addEventListener("storage", handleStorageEvent);
+    // Add broadcast channel message listener
+    refreshChannel.addEventListener("message", handleBroadcastMessage);
 
     return () => {
-
-      localStorage.removeItem("kc-token");
-      localStorage.removeItem("kc-refresh-token");
-      localStorage.removeItem("kc-id-token");
-      localStorage.removeItem("kc-token-refresh-lock");
-
+      // Cleanup
       clearInterval(interval);
-      window.removeEventListener("storage", handleStorageEvent);
+      refreshChannel.removeEventListener("message", handleBroadcastMessage);
+      refreshChannel.close();
     };
   }, [keycloak]);
 
