@@ -3,17 +3,7 @@ import ReactDOM from "react-dom";
 import "./index.css";
 import App from "./App";
 import { ReactKeycloakProvider } from "@react-keycloak/web";
-import SawsxKeycloak from "./SawsxKeycloak"; // Your Keycloak configuration
-
-// Define a function to log Keycloak events (optional)
-const eventLogger = (event, error) => {
-  console.log("onKeycloakEvent", event, error);
-};
-
-// Define a function to log Keycloak tokens (optional)
-const tokenLogger = (tokens) => {
-  console.log("onKeycloakTokens", tokens);
-};
+import SawsxKeycloak from "./SawsxKeycloak";
 
 ReactDOM.render(
   <React.StrictMode>
@@ -24,8 +14,6 @@ ReactDOM.render(
         pkceMethod: "S256",
       }}
       autoRefreshToken={false}
-      onEvent={eventLogger} // Optional: for logging events
-      onTokens={tokenLogger} // Optional: for logging tokens
     >
       <App />
     </ReactKeycloakProvider>
