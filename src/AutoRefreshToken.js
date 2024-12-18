@@ -105,7 +105,7 @@ const AutoRefreshToken = ({ children, setKc }) => {
       refreshChannel.removeEventListener("message", handleBroadcastMessage);
       refreshChannel.close();
     };
-  }, [keycloak]);
+  }, [keycloak, setKc]);
 
   return children;
 };
