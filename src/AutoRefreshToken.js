@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 
+const LOCK_CHANNEL = "kc-token-refresh";
+const LOCK_TIMEOUT = 5 * 60 * 1000 - 20000; // Token expiration in minutes * 60 seconds - 20 seconds
+
 const AutoRefreshToken = ({ children, setKc }) => {
-  const LOCK_CHANNEL = "kc-token-refresh";
-  const LOCK_TIMEOUT = 1 * 60 * 1000 - 10000; // Token expiration in minutes * 60 seconds - 10 seconds
   const { keycloak } = useKeycloak();
 
   useEffect(() => {
@@ -22,10 +23,8 @@ const AutoRefreshToken = ({ children, setKc }) => {
     const delay = (ms = 1000) =>
       new Promise((resolve) => setTimeout(resolve, ms));
 
-    const refreshToken = async () => {
-      if (Date.now() - lastUpdate < LOCK_TIMEOUT) {
-        return;
-      }
+    const attemptTokenRefresh = async () => {
+      if (Date.now() - lastUpdate < LOCK_TIMEOUT) return;
 
       const newLastUpdate = Date.now();
       lastUpdate = newLastUpdate;
@@ -35,14 +34,11 @@ const AutoRefreshToken = ({ children, setKc }) => {
         lastUpdate: newLastUpdate,
       });
 
-      await delay(); // Introduce a small delay to allow other tabs to process the message
+      await delay(); // Allow other tabs to process the message
 
       if (lastUpdate !== newLastUpdate) {
-        console.log("Another tab has taken the lock.");
         return;
       }
-
-      console.log(`Locked for token refresh at ${getDate()}`);
 
       try {
         const refreshed = await keycloak.updateToken(30);
@@ -53,11 +49,9 @@ const AutoRefreshToken = ({ children, setKc }) => {
             refreshToken: keycloak.refreshToken,
             idToken: keycloak.idToken,
           };
-
           setKc({ ...keycloak });
-
           refreshChannel.postMessage(tokenUpdate);
-          console.log(
+          console.debug(
             `Token refreshed: ${keycloak.token.slice(-5)} at ${getDate()}`
           );
         }
@@ -68,29 +62,30 @@ const AutoRefreshToken = ({ children, setKc }) => {
 
     const interval = setInterval(() => {
       if (keycloak.token && keycloak.isTokenExpired(30)) {
-        refreshToken();
+        attemptTokenRefresh();
       }
-    }, 10000); // Check every 30 seconds, adjust as needed
+    }, 10000);
 
     const handleBroadcastMessage = (event) => {
-      switch (event.data.type) {
+      const {
+        type,
+        lastUpdate: newLastUpdate,
+        token,
+        refreshToken,
+        idToken,
+      } = event.data || {};
+      switch (type) {
         case "LAST_UPDATE":
-          lastUpdate = event.data.lastUpdate;
-          console.log(
-            `LastUpdate synchronized across tabs: ${getDate(
-              new Date(lastUpdate)
-            )}`
-          );
+          lastUpdate = newLastUpdate;
           break;
 
         case "TOKEN_UPDATE":
-          if (event.data.token) {
-            keycloak.token = event.data.token;
-            keycloak.refreshToken = event.data.refreshToken;
-            keycloak.idToken = event.data.idToken;
-
+          if (token) {
+            keycloak.token = token;
+            keycloak.refreshToken = refreshToken;
+            keycloak.idToken = idToken;
             setKc({ ...keycloak });
-            console.log(
+            console.debug(
               `Token updated across tabs: ${keycloak.token.slice(
                 -5
               )} at ${getDate()}`
@@ -110,7 +105,7 @@ const AutoRefreshToken = ({ children, setKc }) => {
       refreshChannel.removeEventListener("message", handleBroadcastMessage);
       refreshChannel.close();
     };
-  }, []);
+  }, [keycloak]);
 
   return children;
 };
