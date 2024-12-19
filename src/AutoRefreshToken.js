@@ -4,6 +4,7 @@ import { useKeycloak } from "@react-keycloak/web";
 const LOCK_CHANNEL = "kc-token-refresh";
 const LOCK_TIMEOUT = 1 * 60 * 1000 - 20000; // Token expiration in minutes * 60 seconds - 20 seconds
 const LOCK_OWNER_KEY = "kc-lock-owner";
+const uniqueTabId = `${Math.random().toString(36).substring(7)}`; // Unique identifier for this tab
 
 const AutoRefreshToken = ({ children, setKc }) => {
   const { keycloak } = useKeycloak();
@@ -12,7 +13,6 @@ const AutoRefreshToken = ({ children, setKc }) => {
     if (!keycloak) return;
 
     const refreshChannel = new BroadcastChannel(LOCK_CHANNEL);
-    const uniqueTabId = `${Math.random().toString(36).substring(7)}`; // Unique identifier for this tab
     let lastUpdate = Date.now();
 
     const getDate = (date = new Date()) =>
@@ -64,7 +64,7 @@ const AutoRefreshToken = ({ children, setKc }) => {
           console.debug(
             `Token renewed: ${keycloak.token.slice(
               -5
-            )} at ${getDate()} ${lastUpdate} ${currentLockOwner}`
+            )} at ${getDate()} ${lastUpdate} ${uniqueTabId}`
           );
         }
       } catch (error) {
@@ -73,6 +73,10 @@ const AutoRefreshToken = ({ children, setKc }) => {
     };
 
     const interval = setInterval(() => {
+      const owner = localStorage.getItem(LOCK_OWNER_KEY);
+      if (!owner) {
+        localStorage.setItem(LOCK_OWNER_KEY, uniqueTabId);
+      }
       if (keycloak.token && keycloak.isTokenExpired(30)) {
         attemptTokenRefresh();
       }
@@ -126,7 +130,7 @@ const AutoRefreshToken = ({ children, setKc }) => {
       clearInterval(ownerMaintenance);
       localStorage.removeItem(LOCK_OWNER_KEY);
     };
-  }, [keycloak]);
+  }, [keycloak, setKc]);
 
   return children;
 };
