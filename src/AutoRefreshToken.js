@@ -2,7 +2,8 @@ import { useEffect } from "react";
 import { useKeycloak } from "@react-keycloak/web";
 
 const LOCK_CHANNEL = "kc-token-refresh";
-const LOCK_TIMEOUT = 5 * 60 * 1000 - 20000; // Token expiration in minutes * 60 seconds - 20 seconds
+const LOCK_TIMEOUT = 1 * 60 * 1000 - 20000; // Token expiration in minutes * 60 seconds - 20 seconds
+const LOCK_OWNER_KEY = "kc-lock-owner";
 
 const AutoRefreshToken = ({ children, setKc }) => {
   const { keycloak } = useKeycloak();
@@ -11,6 +12,7 @@ const AutoRefreshToken = ({ children, setKc }) => {
     if (!keycloak) return;
 
     const refreshChannel = new BroadcastChannel(LOCK_CHANNEL);
+    const uniqueTabId = `${Math.random().toString(36).substring(7)}`; // Unique identifier for this tab
     let lastUpdate = Date.now();
 
     const getDate = (date = new Date()) =>
@@ -20,23 +22,31 @@ const AutoRefreshToken = ({ children, setKc }) => {
         second: "2-digit",
       });
 
-    const delay = (ms = 1000) =>
-      new Promise((resolve) => setTimeout(resolve, ms));
+    const getLockOwner = () => localStorage.getItem(LOCK_OWNER_KEY);
+    const setLockOwner = (owner) => localStorage.setItem(LOCK_OWNER_KEY, owner);
 
     const attemptTokenRefresh = async () => {
-      if (Date.now() - lastUpdate < LOCK_TIMEOUT) return;
+      const currentLockOwner = getLockOwner();
 
-      const newLastUpdate = Date.now();
-      lastUpdate = newLastUpdate;
+      // Skip if another tab owns the lock or if the timeout hasn't expired
+      if (
+        (currentLockOwner && currentLockOwner !== uniqueTabId) ||
+        Date.now() - lastUpdate < LOCK_TIMEOUT
+      ) {
+        return;
+      }
+
+      // Try to acquire the lock
+      setLockOwner(uniqueTabId);
+      lastUpdate = Date.now();
 
       refreshChannel.postMessage({
         type: "LAST_UPDATE",
-        lastUpdate: newLastUpdate,
+        lastUpdate: lastUpdate,
       });
 
-      await delay(); // Allow other tabs to process the message
-
-      if (lastUpdate !== newLastUpdate) {
+      // Verify if the current tab still owns the lock
+      if (getLockOwner() !== uniqueTabId) {
         return;
       }
 
@@ -52,7 +62,9 @@ const AutoRefreshToken = ({ children, setKc }) => {
           setKc({ ...keycloak });
           refreshChannel.postMessage(tokenUpdate);
           console.debug(
-            `Token refreshed: ${keycloak.token.slice(-5)} at ${getDate()}`
+            `Token renewed: ${keycloak.token.slice(
+              -5
+            )} at ${getDate()} ${lastUpdate} ${currentLockOwner}`
           );
         }
       } catch (error) {
@@ -66,6 +78,12 @@ const AutoRefreshToken = ({ children, setKc }) => {
       }
     }, 10000);
 
+    const ownerMaintenance = setInterval(() => {
+      if (Date.now() - lastUpdate > LOCK_TIMEOUT + 60000) {
+        localStorage.removeItem(LOCK_OWNER_KEY);
+      }
+    }, 10000);
+
     const handleBroadcastMessage = (event) => {
       const {
         type,
@@ -74,6 +92,7 @@ const AutoRefreshToken = ({ children, setKc }) => {
         refreshToken,
         idToken,
       } = event.data || {};
+
       switch (type) {
         case "LAST_UPDATE":
           lastUpdate = newLastUpdate;
@@ -86,9 +105,9 @@ const AutoRefreshToken = ({ children, setKc }) => {
             keycloak.idToken = idToken;
             setKc({ ...keycloak });
             console.debug(
-              `Token updated across tabs: ${keycloak.token.slice(
+              `Token updated: ${keycloak.token.slice(
                 -5
-              )} at ${getDate()}`
+              )} at ${getDate()} ${lastUpdate}`
             );
           }
           break;
@@ -104,8 +123,10 @@ const AutoRefreshToken = ({ children, setKc }) => {
       clearInterval(interval);
       refreshChannel.removeEventListener("message", handleBroadcastMessage);
       refreshChannel.close();
+      clearInterval(ownerMaintenance);
+      localStorage.removeItem(LOCK_OWNER_KEY);
     };
-  }, [keycloak, setKc]);
+  }, [keycloak]);
 
   return children;
 };
