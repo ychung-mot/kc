@@ -13,7 +13,7 @@ ReactDOM.render(
         onLoad: "login-required",
         pkceMethod: "S256",
       }}
-      autoRefreshToken={false}
+      autoRefreshToken={true}
     >
       <App />
     </ReactKeycloakProvider>

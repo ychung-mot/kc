@@ -1,14 +1,13 @@
 import Keycloak from "keycloak-js";
 
-const keycloakConfig = {
-  realm: "master",
-  url: "https://keycloak-b07b69-dev.apps.advsol-ams.3j6z.p1.openshiftapps.com/",
-  clientId: "advsol-public",
+const SawsxKeycloak = new Keycloak({
+  realm: "standard",
+  url: "https://dev.loginproxy.gov.bc.ca/auth",
+  clientId: "saw-sx-5132",
   checkLoginIframe: false,
-};
+});
 
-const SawsxKeycloak = new Keycloak(keycloakConfig);
-
-SawsxKeycloak.onAuthRefreshError = () => console.log('Error on refreshing token!');
+SawsxKeycloak.onAuthRefreshError = () =>
+  console.log("Error on refreshing token!");
 
 export default SawsxKeycloak;
